@@ -3,26 +3,22 @@ import { v4 as uuidv4 } from 'uuid';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/prisma/prisma.service';
-import { SupabaseClient, createClient } from '@supabase/supabase-js';
+import { IpfsService } from '@/ipfs/ipfs.service';
 import { ImageResponse } from '@/image/type/response/get-image.response';
 import { GenerateImageResponse } from '@/image/type/response/image-generate.response';
 
 @Injectable()
 export class ImageService {
-  private supabaseClient: SupabaseClient;
   private readonly runpodToken: string;
   private readonly styleToken: string;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly ipfsService: IpfsService,
   ) {
-    const url = this.configService.get<string>('SUPABASE_URL');
-    const anonKey = this.configService.get<string>('SUPABASE_ANON_KEY');
-
     this.runpodToken = this.configService.get<string>('RUNPOD_TOKEN');
     this.styleToken = this.configService.get<string>('STYLE_TOKEN');
-    this.supabaseClient = createClient(url, anonKey);
   }
 
   async generateAndUploadImage(
@@ -32,42 +28,38 @@ export class ImageService {
     try {
       const base64Image = await this.generateImageFromAI(prompt);
 
-      const fileUid = uuidv4();
-      const filePath = `${userId}/${fileUid}.png`;
+      // Convert base64 to buffer
+      const fileBuffer = Buffer.from(base64Image, 'base64');
+      const fileName = `${userId}-${uuidv4()}.png`;
 
-      const { error } = await this.supabaseClient.storage
-        .from('images')
-        .upload(filePath, Buffer.from(base64Image, 'base64'), {
-          contentType: 'image/png',
-          cacheControl: '3600',
-          upsert: false,
-        });
+      // Upload to IPFS
+      const ipfsUrl = await this.ipfsService.uploadFileToIPFS(
+        fileBuffer,
+        fileName,
+      );
 
-      if (error) {
-        throw new Error('Failed to upload image to Supabase: ' + error.message);
-      }
+      // Convert IPFS URL to HTTP gateway URL for easier access
+      const gatewayUrl = this.ipfsService.convertToGatewayURL(ipfsUrl);
 
-      const publicURL =
-        'https://fhzycbfipxyhbbshlstw.supabase.co/storage/v1/object/public/images/' +
-        filePath;
-
+      // Save to database
       const user = await this.prisma.user.findUnique({
         where: { walletAddress: userId },
       });
+
       if (!user) {
         throw new Error('User not found');
       }
 
       await this.prisma.image.create({
         data: {
-          url: publicURL,
+          url: ipfsUrl, // Store the IPFS URL
           userWalletAddress: user.walletAddress,
           prompt: prompt,
         },
       });
 
       return {
-        imageURL: publicURL,
+        imageURL: gatewayUrl, // Return the HTTP gateway URL for frontend display
         prompt: prompt,
       };
     } catch (error) {
@@ -138,8 +130,13 @@ export class ImageService {
     `;
 
     const imageResponses: ImageResponse[] = result.map((image) => {
+      // Convert IPFS URLs to HTTP gateway URLs
+      const displayUrl = image.url.startsWith('ipfs://')
+        ? this.ipfsService.convertToGatewayURL(image.url)
+        : image.url;
+
       return {
-        imageURL: image.url,
+        imageURL: displayUrl,
         createdBy: image.userWalletAddress,
         prompt: image.prompt,
       };
@@ -150,8 +147,13 @@ export class ImageService {
   async getAllImagesWithCreator(): Promise<ImageResponse[]> {
     const images = await this.prisma.image.findMany();
     const imageResponses: ImageResponse[] = images.map((image) => {
+      // Convert IPFS URLs to HTTP gateway URLs
+      const displayUrl = image.url.startsWith('ipfs://')
+        ? this.ipfsService.convertToGatewayURL(image.url)
+        : image.url;
+
       return {
-        imageURL: image.url,
+        imageURL: displayUrl,
         createdBy: image.userWalletAddress,
         prompt: image.prompt,
       };
