@@ -1,6 +1,6 @@
 import { ApiResponse } from '@nestjs/swagger';
 import { ImageService } from '@/image/image.service';
-import { Controller, Post, Body, Get } from '@nestjs/common';
+import { Controller, Post, Body, Get, Logger } from '@nestjs/common';
 import { Public } from '@/common/decorators/public.decorator';
 import { GenerateImageDto } from '@/image/type/dto/image-generate.dto';
 import { ImageResponse } from '@/image/type/response/get-image.response';

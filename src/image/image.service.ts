@@ -69,7 +69,7 @@ export class ImageService {
       return {
         imageURL: publicURL,
         prompt: prompt,
-      }
+      };
     } catch (error) {
       console.error('Error generating or uploading image:', error);
       throw new Error('Image generation or upload failed');
@@ -125,6 +125,7 @@ export class ImageService {
       {
         url: string;
         userWalletAddress: string;
+        prompt: string;
       }[]
     >`
       SELECT 
@@ -140,6 +141,7 @@ export class ImageService {
       return {
         imageURL: image.url,
         createdBy: image.userWalletAddress,
+        prompt: image.prompt,
       };
     });
     return imageResponses;
@@ -151,6 +153,7 @@ export class ImageService {
       return {
         imageURL: image.url,
         createdBy: image.userWalletAddress,
+        prompt: image.prompt,
       };
     });
     return imageResponses;

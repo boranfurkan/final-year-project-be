@@ -14,4 +14,11 @@ export class ImageResponse {
     type: String,
   })
   createdBy: string;
+
+  @ApiProperty({
+    description: 'Prompt used to generate the image',
+    example: 'A beautiful sunset over the mountains',
+    type: String,
+  })
+  prompt: string;
 }
