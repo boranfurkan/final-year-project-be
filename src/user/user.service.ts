@@ -1,5 +1,5 @@
 import { Chain } from '@prisma/client';
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 
 @Injectable()
@@ -25,7 +25,9 @@ export class UserService {
     });
 
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundException(
+        `User with wallet address ${walletAddress} not found`,
+      );
     }
 
     return {
@@ -53,19 +55,33 @@ export class UserService {
     const user = await this.prisma.user.findUnique({
       where: { walletAddress },
       include: {
-        images: true,
+        images: {
+          orderBy: {
+            createdAt: 'desc', // Get newest images first
+          },
+        },
       },
     });
 
     if (!user) {
-      throw new Error('User not found');
+      // Return empty result instead of throwing an error for better UX
+      return {
+        imageUrls: [],
+        count: 0,
+      };
     }
 
-    const imageUrls = user.images.map((image) => image.url);
+    // Extract image URLs and other relevant information for each image
+    const images = user.images.map((image) => ({
+      url: image.url,
+      prompt: image.prompt,
+      createdAt: image.createdAt,
+    }));
 
     return {
-      imageUrls,
-      count: imageUrls.length,
+      imageUrls: user.images.map((image) => image.url),
+      images: images,
+      count: images.length,
     };
   }
 }
